@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum userRole {
+  DOCTOR
+  REDIOLOGIST
+}
+
+model Doctor {
+  id       String   @id @default(uuid())
+  name     String
+  email    String   @unique
+  password String
+  role     userRole @default(DOCTOR)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reports Report[]
+}
+
+model Rediologist {
+  id       String   @id @default(uuid())
+  name     String
+  email    String   @unique
+  password String
+  role     userRole
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reports Report[]
+}
+
+model Report {
+  id            String   @id @default(uuid())
+  Name          String
+  Type          String
+  Description   String
+  doctorId      String
+  rediologistId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  doctor      Doctor      @relation(fields: [doctorId], references: [id])
+  rediologist Rediologist @relation(fields: [rediologistId], references: [id])
+}

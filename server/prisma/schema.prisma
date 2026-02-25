@@ -5,33 +5,19 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
-enum userRole {
+enum UserRole {
   DOCTOR
-  REDIOLOGIST
+  RADIOLOGIST
 }
 
-model Doctor {
+model User {
   id       String   @id @default(uuid())
   name     String
   email    String   @unique
   password String
-  role     userRole @default(DOCTOR)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  reports Report[]
-}
-
-model Rediologist {
-  id       String   @id @default(uuid())
-  name     String
-  email    String   @unique
-  password String
-  role     userRole
+  role     UserRole
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -40,15 +26,18 @@ model Rediologist {
 }
 
 model Report {
-  id            String   @id @default(uuid())
-  Name          String
-  Type          String
-  Description   String
-  doctorId      String
-  rediologistId String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String @id @default(uuid())
+  patientName     String
+  tumorType       String
+  confidence      Float
+  findings        String
+  impression      String
+  recommendations String
+  pdfUrl          String
+  userId          String
 
-  doctor      Doctor      @relation(fields: [doctorId], references: [id])
-  rediologist Rediologist @relation(fields: [rediologistId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
 }

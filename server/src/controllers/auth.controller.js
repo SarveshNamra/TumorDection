@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 import db from "../libs/db.js";
-import { userRole } from "../generated/prisma/index.js";
+import { UserRole } from "@prisma/client";
 
 export const register = async(req, res) => {
     const {email, password, name} = req.body;
@@ -35,12 +35,12 @@ export const register = async(req, res) => {
                 name,
                 email,
                 password: hashedPassword,
-                role: userRole
-            }
+                role: role || UserRole.RADIOLOGIST, // This is default role
+            },
         });
 
         const token = jwt.sign(
-            {id: newUser.id}, 
+            {id: newUser.id, role: newUser.role }, 
             process.env.JWT_SECRET, 
             {expiresIn: "7d"}
         );
@@ -49,10 +49,10 @@ export const register = async(req, res) => {
             httpOnly: true,
             sameSite: "strict",
             secure: precess.env.NODE_ENV !== "development",
-            maxAge: 5 * 24 * 60 * 60 * 1000
-        })
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
 
-        res.status(200).json({
+        res.status(201).json({
             success: true,
             message: "User created successfully",
             user: {
@@ -60,7 +60,7 @@ export const register = async(req, res) => {
                 name: newUser.name,
                 email: newUser.email,
                 role: newUser.role,
-            }
+            },
         });
 
     } catch (error) {
@@ -75,9 +75,9 @@ export const login = async(req, res) => {
     const {email, password} = req.body;
 
     if(!email || !password){
-        return req.status(400).json({
+        return res.status(400).json({
             success: false,
-            message: "Please enter all fields"
+            message: "Please enter all fields",
         });
     }
 
@@ -85,13 +85,13 @@ export const login = async(req, res) => {
         const user = await db.user.findUnique({
             where: {
                 email
-            }
+            },
         });
 
         if(!user) {
             return res.status(401).json({
                 success: false,
-                message: "User not found"
+                message: "User not found",
             });
         }
 
@@ -100,12 +100,12 @@ export const login = async(req, res) => {
         if(!isMatch){
             return res.status(401).json({
                 success: false,
-                message: "Invalid credentials! Try again"
+                message: "Invalid credentials! Try again",
             });
         }
 
         const token = jwt.sign(
-            {id: user.id}, 
+            {id: user.id, role: user.role}, 
             process.env.JWT_SECRET, 
             {expiresIn: "7d"}
         );
@@ -114,7 +114,7 @@ export const login = async(req, res) => {
             httpOnly: true,
             sameSite: "strict",
             secure: precess.env.NODE_ENV !== "development",
-            maxAge: 5 * 24 * 60 * 60 * 1000
+            maxAge: 7 * 24 * 60 * 60 * 1000,
         })
 
         res.status(200).json({
@@ -125,9 +125,10 @@ export const login = async(req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-            }
-        })
+            },
+        });
     } catch (error) {
+        console.error(error);
         res.status(500).json({
             success: false,
             message: "Something went wrong while logging in",
@@ -145,12 +146,12 @@ export const logout = async(req, res) => {
 
         res.status(200).json({
             success: true,
-            message: "User logged out successfully"
-        })
+            message: "User logged out successfully",
+        });
     } catch (error) {
         res.status(500).json({
             success: false,
-            error: "Error in Logout user"
+            error: "Error in Logout user",
         });
     }
 };

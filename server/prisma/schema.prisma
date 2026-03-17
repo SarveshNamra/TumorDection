@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -7,10 +7,28 @@ datasource db {
   provider = "postgresql"
 }
 
+// Enums
+
 enum UserRole {
   DOCTOR
   RADIOLOGIST
 }
+
+enum ScanStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum TumorType {
+  GLIOMA
+  MENINGIOMA
+  PITUITARY
+  NO_TUMOR
+}
+
+// Core Eentities / Models
 
 model User {
   id       String   @id @default(uuid())
@@ -19,25 +37,72 @@ model User {
   password String
   role     UserRole
 
+  patients Patient[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  reports Report[]
+  @@index([email])
+  @@map("users")
+}
+
+model Patient {
+  id             String  @id @default(uuid())
+  fullName       String
+  age            Int
+  gender         String
+  medicalHiatory String? @db.Text
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  scans Scan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Scan {
+  id String @id @default(uuid())
+
+  imageUrl     String
+  cloudinaryId String @unique
+
+  status ScanStatus @default(PENDING)
+
+  tumorType    TumorType?
+  confidence   Float?
+  heatmapUrl   String?
+  errorMessage String?    @db.Text
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  reprot Report?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("scans")
 }
 
 model Report {
-  id              String @id @default(uuid())
-  patientName     String
-  tumorType       String
-  confidence      Float
-  findings        String
-  impression      String
-  recommendations String
-  pdfUrl          String
-  userId          String
+  id String @id @default(uuid())
+
+  findings        String @db.Text
+  impression      String @db.Text
+  recommendations String @db.Text
+
+  scanId String @unique
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id])
+  @@index([scanId])
+  @@index([createdAt])
+  @@map("reports")
 }

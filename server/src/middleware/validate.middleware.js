@@ -4,6 +4,9 @@ import { validationSchemas } from "../utils/validators.js";
 // To validate request body against schemas
 export const validate = (schemaName) => {
     return (req, res, next) => {
+        // validate(schemaName) → factory that creates a middleware based on the schema name.
+        // (req, res, next) => { ... } → actual worker that handles each request.
+        
         const schema = validateSchemas[schemaName];
 
         if (!schema) {
@@ -35,3 +38,9 @@ export const validate = (schemaName) => {
         next();
     };
 };
+
+// The outer arrow function lets you configure middleware dynamically (schemaName in this case).
+
+// The inner arrow function is the actual middleware Express will call on every request.
+
+// Without returning (req, res, next) => {} you cannot access the request/response objects in your middleware.

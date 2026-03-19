@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import authRouter from "./routes/auth.routes.js";
+import patientRouter from "./routes/patient.routes.js";
 import reportRouter from "./routes/report.routes.js";
 import scanRouter from "./routes/scan.routes.js";
 
@@ -22,6 +23,7 @@ app.get("/", (req, res) => {
 
 // Routes
 app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/patients", patientRouter);
 app.use("/api/v1/report", reportRouter);
 app.use("/api/v1/scan", scanRouter);
 

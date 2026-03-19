@@ -25,7 +25,7 @@ app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/report", reportRouter);
 app.use("/api/v1/scan", scanRouter);
 
-// Global error handler (optional but recommended)
+// Global error handler 
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(err.statusCode || 500).json({

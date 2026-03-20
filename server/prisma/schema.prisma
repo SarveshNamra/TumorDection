@@ -51,7 +51,7 @@ model Patient {
   fullName       String
   age            Int
   gender         String
-  medicalHiatory String? @db.Text
+  medicalHistory String? @db.Text
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -1,6 +1,6 @@
 import express from "express";
 import { report } from "process";
-import { authenticate, authorize } from "../middleware/auth.middleware";
+import { authenticate, authorize } from "../middleware/auth.middleware.js";
 
 const reportRouter = express.Router();
 

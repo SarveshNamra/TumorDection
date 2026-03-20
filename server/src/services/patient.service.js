@@ -1,4 +1,4 @@
-import { deletePatient, updatePatient } from "../controllers/patient.controller";
+import { deletePatient, updatePatient } from "../controllers/patient.controller.js";
 import db from "../libs/db.js";
 
 export const patientService = {

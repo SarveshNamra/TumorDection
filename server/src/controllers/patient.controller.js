@@ -1,31 +1,15 @@
-import db from "../libs/db.js";
+import { patientService } from "../services/patient.service.js";
 
 export const createPatient = async (req, res) => {
     try {
         const { fullName, age, gender, medicalHistory } = req.body;
 
-        if (!fullName || !age || !gender || !medicalHistory) {
-            return res.status(400).json({
-                success: false,
-                message: "All fields are required",
-            });
-        }
-
-        if (age <= 0 || !Number.isInteger(age)) {
-            return res.status(400).json({
-                success: false,
-                message: "Age must be a positive integer",
-            });
-        }
-
-        const patient = await db.patient.create({
-            data: {
-                fullName,
-                age,
-                gender,
-                medicalHistory: medicalHistory || null,
-                userId: req.user.id,
-            },
+        const patient = await patientService.createPatient({
+            fullName,
+            age,
+            gender,
+            medicalHistory,
+            userId: req.user.id,
         });
 
         res.status(201).json({
@@ -34,31 +18,17 @@ export const createPatient = async (req, res) => {
             data: patient,
         });
     } catch (error) {
-        console.error("Error creating patient:", error);
-        res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({
             success: false,
-            message: "Failed to create patient",
+            message: error.message || "Failed to create patient",
         });
     }
 };
 
 export const getPatients = async (req, res) => {
     try {
-        const patients = await db.patient.findMany({
-            where: {
-                userId: req.user.id,
-            },
-            orderBy: {
-                createdAt: "desc",
-            },
-            include: {
-                _count: {
-                    select: {
-                        scans: true
-                    },
-                },
-            },
-        });
+        const patients = await patientService.getPatientByUserId(req.user.id);
 
         res.status(200).json({
             success: true,
@@ -66,37 +36,19 @@ export const getPatients = async (req, res) => {
             data: patients,
         })
     } catch (error) {
-        console.error("Error fetching patients:", error);
-        res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({
             success: false,
-            message: "Failed to retrieve patients",
+            message: error.message || "Failed to retrieve patients",
         });
     }
 };
 
 export const getPatientById = async (req, res) => {
     try {
-        const patient = await db.patient.findUnique({
-            where: {
-                id: id,
-                userId: req.user.id,
-            },
-            include: {
-                scans: {
-                    orderBy: {
-                        createdAt: "desc",
-                    },
-                    take: 10,
-                },
-            },
-        });
+        const { id } = req.params;
 
-        if(!patient){
-            return res.status(404).json({
-                success: false,
-                message: "Patient not found or access denied",
-            });
-        }
+        const patient = await patientService.getPatientById(id, req.user.id);
 
         res.status(200).json({
             success: true,
@@ -104,10 +56,10 @@ export const getPatientById = async (req, res) => {
             data: patient,
         });
     } catch (error) {
-        console.error("Error fetching patient:", error);
-        res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({
             success: false,
-            message: "Failed to retrieve patient",
+            message: error.message || "Failed to retrieve patient",
         });
     }
 };
@@ -117,41 +69,11 @@ export const updatePatient = async (req, res) => {
         const { id } = req.params;
         const { fullName, age, gender, medicalHistory } = req.body;
 
-        if (age && (age <= 0 || !Number.isInteger(age))) {
-            return res.status(400).json({
-                success: false,
-                message: "Age must be a positive integer",
-            });
-        }
-
-        const existingPatient = await db.patient.findUnique({
-            where: {
-                id: id,
-                userId: req.user.id,
-            },
-        });
-
-        if (!existingPatient) {
-            return res.status(404).json({
-                success: false,
-                message: "Patient not found or access denied",
-            });
-        }
-
-        // To update object dynamically and can only update provided fields
-        const updateData = {}; // Empty object to store updated fields
-
-        if (fullName !== undefined) updateData.fullName = fullName;
-        if (age !== undefined) updateData.age = age;
-        if (gender !== undefined) updateData.gender = gender;
-        if (medicalHistory !== undefined) updateData.medicalHistory = medicalHistory;
-
-        const updatedPatient = await db.patient.update({
-            where: {
-                id: id,
-            },
-            data: updateData,
-        });
+        const updatedPatient = await patientService.updatePatient(
+            id,
+            req.user.id,
+            { fullName, age, gender, medicalHistory }
+        );
 
         res.status(200).json({
             success: true,
@@ -159,10 +81,10 @@ export const updatePatient = async (req, res) => {
             data: updatedPatient,
         });
     } catch (error) {
-        console.error("Error updating patient:", error);
-        res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({
             success: false,
-            message: "Failed to update patient",
+            message: error.message || "Failed to update patient",
         }); 
     }
 };
@@ -171,25 +93,7 @@ export const deletePatient = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const existingPatient = await db.patient.findUnique({
-            where: {
-                id: id,
-                userId: req.user.id,
-            },
-        }); 
-
-        if (!existingPatient) {
-            return res.status(404).json({
-                success: false,
-                message: "Patient not found or access denied",
-            });
-        }
-
-        await db.patient.delete({
-            where: {
-                id: id,
-            },
-        });
+        await patientService.deletePatient(id, req.user.id);
 
         res.status(200).json({
             success: true,
@@ -197,10 +101,10 @@ export const deletePatient = async (req, res) => {
             data: null,
         });
     } catch (error) {
-        console.error("Error deleting patient:", error);
-        res.status(500).json({
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({
             success: false,
-            message: "Failed to delete patient",
+            message: error.message || "Failed to delete patient",
         });
     }
 };

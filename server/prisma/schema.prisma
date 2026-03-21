@@ -60,6 +60,10 @@ model Patient {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("patients")
 }
 
 model Scan {
@@ -95,6 +99,9 @@ model Report {
   findings        String @db.Text
   impression      String @db.Text
   recommendations String @db.Text
+
+  pdfUrl          String
+  pdfCloudinaryId String? @unique
 
   scanId String @unique
   scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)

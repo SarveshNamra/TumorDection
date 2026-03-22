@@ -24,8 +24,8 @@ app.get("/", (req, res) => {
 // Routes
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/patients", patientRouter);
-app.use("/api/v1/report", reportRouter);
-app.use("/api/v1/scan", scanRouter);
+app.use("/api/v1/reports", reportRouter);
+app.use("/api/v1/scans", scanRouter);
 
 // Global error handler 
 app.use((err, req, res, next) => {

@@ -82,7 +82,7 @@ model Scan {
   patientId String
   patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
-  reprot Report?
+  report Report?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

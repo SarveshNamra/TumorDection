@@ -1,4 +1,4 @@
-import db from '../lib/db.js';
+import db from '../libs/db.js';
 
 export const createScan = async (req, res) => {
     try {

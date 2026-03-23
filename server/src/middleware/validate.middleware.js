@@ -1,13 +1,12 @@
-import { abort } from "process";
 import { validationSchemas } from "../utils/validators.js";
 
 // To validate request body against schemas
 export const validate = (schemaName) => {
     return (req, res, next) => {
-        // validate(schemaName) → factory that creates a middleware based on the schema name.
-        // (req, res, next) => { ... } → actual worker that handles each request.
+        // validate(schemaName) -> factory that creates a middleware based on the schema name.
+        // (req, res, next) => { ... } -> actual worker that handles each request.
         
-        const schema = validateSchemas[schemaName];
+        const schema = validationSchemas[schemaName];
 
         if (!schema) {
             return res.status(500).json({

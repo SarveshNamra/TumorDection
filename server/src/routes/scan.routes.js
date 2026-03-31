@@ -1,12 +1,13 @@
 import express from "express";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { createScan, getScansByPatientId, getScanById, deleteScan, updateScanMLResults } from "../controllers/scan.controller.js";
+import { uploadScan } from "../middleware/upload.middleware.js";
 
 const scanRouter = express.Router();
 
 scanRouter.use(authenticate);
 
-scanRouter.post("/", createScan);
+scanRouter.post('/', uploadScan.single('image'), createScan);
 scanRouter.get("/patient/:patientId", getScansByPatientId);
 scanRouter.get("/:id", getScanById);
 scanRouter.delete("/:id", deleteScan);

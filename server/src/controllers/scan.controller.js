@@ -1,13 +1,33 @@
 import db from '../libs/db.js';
+import { cloudinaryService } from '../services/cloudinary.service.js';
+import { mlService } from '../services/ml.service.js';
+import fs from 'fs';
+
+// Map ML service lowercase response to Prisma uppercase enum
+const TUMOR_TYPE_MAP = {
+  'glioma': 'GLIOMA',
+  'meningioma': 'MENINGIOMA',
+  'notumor': 'NO_TUMOR',
+  'pituitary': 'PITUITARY',
+};
 
 export const createScan = async (req, res) => {
-    try {
-        const { imageUrl, patientId, cloudinaryId } = req.body;
+    let uploadedFile = null;
+    let cloudinaryResult = null;
+    let createdScan = null;
 
-        if (!imageUrl || !patientId) {
+    try {
+        const { patientId } = req.body;
+        uploadedFile = req.file;
+
+        if (!uploadedFile) {
+            if (fs.existsSync(uploadedFile.path)) {
+                fs.unlinkSync(uploadedFile.path);
+            }
+
             return res.status(400).json({
                 success: false,
-                message: "Please provide imageUrl and patientId",
+                message: "Please provide patientId",
             });
         }
 
@@ -19,18 +39,32 @@ export const createScan = async (req, res) => {
         });
 
         if (!patient) {
+            if (fs.existsSync(uploadedFile.path)) {
+                fs.unlinkSync(uploadedFile.path);
+            }
+
             return res.status(404).json({
                 success: false,
                 message: "Patient not found or access denied",
             });
         }
 
-        const scan = await db.scan.create({
+        try {
+            cloudinaryResult = await cloudinaryService.uploadImage(uploadedFile.path);
+        } catch (cloudinaryError) {
+            console.error("Cloudinary upload error:", cloudinaryError);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to upload image to cloud storage",
+            });
+        }
+
+        createScan = await db.scan.create({
             data: {
-                imageUrl,
-                cloudinaryId: cloudinaryId || null,
+                imageUrl: cloudinaryResult.url,
+                cloudinaryId: cloudinaryResult.publicId,
                 patientId,
-                status: "PENDING",
+                status: "PROCESSING",
                 tumorType: null,
                 confidence: null,
                 heatmapUrl: null,
@@ -47,16 +81,82 @@ export const createScan = async (req, res) => {
             },
         });
 
+        let mlResult;
+        try {
+            mlResult = await mlService.predictTumor(uploadedFile.path);
+        }catch (mlError){
+            console.error("ML prediction error: ", mlError);
+
+            await db.scan.update({
+                where: { id: createdScan.id },
+                data: {
+                    status: "FAILED",
+                    errorMessage: mlError.message || "ML prediction failed",
+                },
+            });
+
+            return res.status(200).json({
+                success: false,
+                message: "Scan uploaded but ML analysis failed",
+                data: {
+                    ...createdScan,
+                    status: "FAILED",
+                    errorMessage: mlError.message,
+                },
+            });
+        }
+
+        const updatedScan = await db.scan.update({
+            where: { id: createdScan.id },
+            data: {
+                status: "COMPLETED",
+                tumorType: TUMOR_TYPE_MAP[mlResult.predictedClass] || null,
+                confidence: mlResult.confidence,
+            },
+            include: {
+                patient: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        age: true,
+                        gender: true,
+                    },
+                },
+            },
+        });
+
         res.status(201).json({
             success: true,
-            message: "Scan created successfully. Processing will begin shortly.",
-            data: scan,
+            message: "Scan created and analyzed successfully",
+            data: {
+                ...updatedScan,
+                mlPrediction: {
+                    predictedClass: mlResult.predictedClass,
+                    confidence: mlResult.confidence,
+                    probabilities: mlResult.probabilities,
+                },
+            },
         });
     } catch (error) {
         console.error("Error creating scan:", error);
+
+        // Cleanup in case of failure
+        // Delete from Cloudinary if uploaded
+        if (cloudinaryResult?.publicId) {
+            await cloudinaryService.deleteImage(cloudinaryResult.publicId);
+        }
+        // Delete scan record if created
+        if (createdScan?.id) {
+            await db.scan.delete({ where: { id: createdScan.id } }).catch(() => {});
+        }
+        // Delete local file if still exists
+        if (uploadedFile?.path && fs.existsSync(uploadedFile.path)) {
+            fs.unlinkSync(uploadedFile.path);
+        }
         res.status(500).json({
             success: false,
             message: "Failed to create scan. Please try again later.",
+            error: error.message,
         });
     }
 };
@@ -192,6 +292,11 @@ export const deleteScan = async (req, res) => {
             });
         }
 
+        // Delete from Cloudinary
+        if (scan.cloudinaryId) {
+            await cloudinaryService.deleteImage(scan.cloudinaryId);
+        }
+
         await db.scan.delete({
             where: { id },
         });
@@ -237,7 +342,7 @@ export const updateScanMLResults = async (req, res) => {
             where: { id },
             data: {
                 status,
-                tumorType: tumorType || null,
+                tumorType: tumorType ? TUMOR_TYPE_MAP[tumorType] || tumorType : null,
                 confidence: confidence || null,
                 heatmapUrl: heatmapUrl || null,
                 errorMessage: errorMessage || null,

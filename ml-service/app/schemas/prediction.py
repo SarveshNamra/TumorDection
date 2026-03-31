@@ -15,13 +15,13 @@ class PredictionResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "success": True,
-                "predictedClass": "GLIOMA",
+                "predictedClass": "glioma",
                 "confidence": 0.92,
                 "probabilities": {
-                    "GLIOMA": 0.92,
-                    "MENINGIOMA": 0.05,
-                    "NO_TUMOR": 0.02,
-                    "PITUITARY": 0.01
+                    "glioma": 0.92,
+                    "meningioma": 0.05,
+                    "notumor": 0.02,
+                    "pituitary": 0.01
                 }
             }
         }

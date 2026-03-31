@@ -15,12 +15,12 @@ class Settings(BaseSettings):
     INPUT_SIZE: tuple = (128, 128)  # 128x128 pixels
     NUM_CLASSES: int = 4
     
-    CLASS_LABELS: dict = {
-        0: "GLIOMA",      # First class
-        1: "MENINGIOMA",  # Second class
-        2: "NO_TUMOR",    # Third class
-        3: "PITUITARY"    # Fourth class
-    }
+    CLASS_LABELS: list = [
+        "glioma",       # Index 0
+        "meningioma",   # Index 1
+        "notumor",      # Index 2
+        "pituitary"     # Index 3
+    ]
     
     NORMALIZE_RANGE: tuple = (0, 1)  # Scale pixel values 0-1
     

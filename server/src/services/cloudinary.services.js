@@ -23,7 +23,7 @@ export const cloudinaryService = {
         ],
       });
 
-      fs.unlinkSync(filePath); // Remove the local file after upload
+      //fs.unlinkSync(filePath); // Remove the local file after upload
 
       return {
         url: result.secure_url,

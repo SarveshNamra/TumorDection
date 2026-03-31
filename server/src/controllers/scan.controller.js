@@ -84,8 +84,16 @@ export const createScan = async (req, res) => {
         let mlResult;
         try {
             mlResult = await mlService.predictTumor(uploadedFile.path);
+
+            if (fs.existsSync(uploadedFile.path)) {
+                fs.unlinkSync(uploadedFile.path);
+            }
         }catch (mlError){
             console.error("ML prediction error: ", mlError);
+
+            if (fs.existsSync(uploadedFile.path)) {
+                fs.unlinkSync(uploadedFile.path);
+            }
 
             await db.scan.update({
                 where: { id: createdScan.id },

@@ -1,5 +1,4 @@
 import { v2 as cloudinary } from 'cloudinary';
-import fs, { truncateSync } from 'fs';
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -23,16 +22,14 @@ export const cloudinaryService = {
         ],
       });
 
-      //fs.unlinkSync(filePath); // Remove the local file after upload
+      console.log(`Uploaded to Cloudinary: ${result.public_id}`);
 
       return {
         url: result.secure_url,
         publicId: result.public_id,
       };
     } catch (error) {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath); // Ensure local file is removed on error
-      }
+      console.error(`Cloudinary upload failed for: ${filePath}`, error);
       throw new Error(`Cloudinary upload failed: ${error.message}`);
     }
   },
@@ -40,9 +37,17 @@ export const cloudinaryService = {
   // Delete an image from Cloudinary using its public ID
   async deleteImage(publicId) {
     try {
-      await cloudinary.uploader.destroy(publicId);
+      const result = await cloudinary.uploader.destroy(publicId);
+      
+      if (result.result === 'ok') {
+        console.log(`Deleted from Cloudinary: ${publicId}`);
+      } else {
+        console.warn(`Cloudinary delete returned: ${result.result} for ${publicId}`);
+      }
+      
+      return result;
     } catch (error) {
-      console.error(`Cloudinary deletion failed: ${error.message}`);
+      console.error(`Cloudinary delete failed for: ${publicId}`, error);
     }
   },
 };

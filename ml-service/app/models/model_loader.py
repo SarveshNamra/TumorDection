@@ -46,6 +46,10 @@ class ModelLoader:
         Raises:
             RuntimeError: If model loading fails
         """
+        if self.model is not None:
+            logger.warning("Model already loaded. Skipping reload.")
+            return self.model
+        
         try:
             logger.info(f"Loading model from: {self.model_path}")
             
@@ -109,6 +113,18 @@ class ModelLoader:
         except Exception as e:
             logger.error(f"Prediction failed: {str(e)}")
             raise RuntimeError(f"Prediction failed: {str(e)}")
+        
+    def reload_model(self):
+        """Reload the model (useful for model updates)"""
+        logger.info("Reloading model...")
+        
+        # Clear old model
+        if self.model is not None:
+            del self.model
+            tf.keras.backend.clear_session()  # Clear TensorFlow session
+        
+        self.model = None
+        return self.load_model()
 
 # Create a global model loader instance (loaded once at startup)
 model_loader = ModelLoader()

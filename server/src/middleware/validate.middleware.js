@@ -21,9 +21,9 @@ export const validate = (schemaName) => {
         });
 
         if (error) {
-            const errors = error.details.map((details) => ({
-                field: details.path.join("."),
-                message: details.message,
+            const errors = error.details.map((detail) => ({
+                field: detail.path.join("."),
+                message: detail.message,
             }))
             
             return res.status(400).json({

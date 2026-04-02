@@ -1,5 +1,5 @@
 import db from '../libs/db.js';
-import { cloudinaryService } from '../services/cloudinary.service.js';
+import { cloudinaryService } from '../services/cloudinary.services.js';
 import { mlService } from '../services/ml.service.js';
 import fs from 'fs';
 
@@ -21,11 +21,14 @@ export const createScan = async (req, res) => {
         uploadedFile = req.file;
 
         if (!uploadedFile) {
-            if (fs.existsSync(uploadedFile.path)) {
-                fs.unlinkSync(uploadedFile.path);
-            }
-
             return res.status(400).json({
+                success: false,
+                message: "Please upload an image file",
+            });
+        }
+
+        if (!patient) {
+                return res.status(400).json({
                 success: false,
                 message: "Please provide patientId",
             });
@@ -39,13 +42,10 @@ export const createScan = async (req, res) => {
         });
 
         if (!patient) {
-            if (fs.existsSync(uploadedFile.path)) {
-                fs.unlinkSync(uploadedFile.path);
-            }
-
+            deleteLocalFile(uploadedFile.path);
             return res.status(404).json({
                 success: false,
-                message: "Patient not found or access denied",
+                message: 'Patient not found or access denied',
             });
         }
 
@@ -53,18 +53,19 @@ export const createScan = async (req, res) => {
             cloudinaryResult = await cloudinaryService.uploadImage(uploadedFile.path);
         } catch (cloudinaryError) {
             console.error("Cloudinary upload error:", cloudinaryError);
+            deleteLocalFile(uploadedFile.path);
             return res.status(500).json({
                 success: false,
                 message: "Failed to upload image to cloud storage",
             });
         }
 
-        createScan = await db.scan.create({
+        createdScan = await db.scan.create({
             data: {
                 imageUrl: cloudinaryResult.url,
                 cloudinaryId: cloudinaryResult.publicId,
                 patientId,
-                status: "PROCESSING",
+                status: "IN_PROGRESS",
                 tumorType: null,
                 confidence: null,
                 heatmapUrl: null,
@@ -85,15 +86,11 @@ export const createScan = async (req, res) => {
         try {
             mlResult = await mlService.predictTumor(uploadedFile.path);
 
-            if (fs.existsSync(uploadedFile.path)) {
-                fs.unlinkSync(uploadedFile.path);
-            }
+            deleteLocalFile(uploadedFile.path);
         }catch (mlError){
             console.error("ML prediction error: ", mlError);
 
-            if (fs.existsSync(uploadedFile.path)) {
-                fs.unlinkSync(uploadedFile.path);
-            }
+            deleteLocalFile(uploadedFile.path);
 
             await db.scan.update({
                 where: { id: createdScan.id },
@@ -148,23 +145,29 @@ export const createScan = async (req, res) => {
     } catch (error) {
         console.error("Error creating scan:", error);
 
-        // Cleanup in case of failure
+        // Delete local file if still exists
+        if (uploadedFile?.path) {
+            deleteLocalFile(uploadedFile.path);
+        }
+
         // Delete from Cloudinary if uploaded
         if (cloudinaryResult?.publicId) {
             await cloudinaryService.deleteImage(cloudinaryResult.publicId);
         }
+
         // Delete scan record if created
         if (createdScan?.id) {
-            await db.scan.delete({ where: { id: createdScan.id } }).catch(() => {});
+            try {
+                await db.scan.delete({ where: { id: createdScan.id } });
+            } catch (dbError) {
+                console.error('Failed to rollback scan:', dbError);
+            }
         }
-        // Delete local file if still exists
-        if (uploadedFile?.path && fs.existsSync(uploadedFile.path)) {
-            fs.unlinkSync(uploadedFile.path);
-        }
+
         res.status(500).json({
             success: false,
             message: "Failed to create scan. Please try again later.",
-            error: error.message,
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
         });
     }
 };

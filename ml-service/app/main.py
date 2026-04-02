@@ -32,6 +32,7 @@ app.add_middleware(
 # ============================================
 # STARTUP EVENT - Runs once when server starts
 # ============================================
+MAX_FILE_SIZE = 10 * 1024 * 1024 
 
 @app.on_event("startup")
 async def startup_event():
@@ -102,7 +103,7 @@ async def predict(file: UploadFile = File(...)):
         JSON with predicted class and probabilities
     """
     try:
-        # Step 1: Validate file type
+        # Validate file type
         if not file.content_type.startswith("image/"):
             raise HTTPException(
                 status_code=400,
@@ -113,10 +114,21 @@ async def predict(file: UploadFile = File(...)):
                 }
             )
         
-        # Step 2: Read image bytes
-        image_bytes = await file.read()
+        # Read image bytes
+        image_bytes = await file.read(MAX_FILE_SIZE + 1) # Read up to max size + 1 byte
         
-        # Step 3: Validate image
+        # ✅ Step 3: Check file size
+        if len(image_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "success": False,
+                    "error": "File too large",
+                    "details": f"Maximum file size is {MAX_FILE_SIZE // (1024*1024)}MB",
+                }
+            )
+
+        # Validate image
         if not preprocessor.validate_image(image_bytes):
             raise HTTPException(
                 status_code=400,
@@ -127,17 +139,17 @@ async def predict(file: UploadFile = File(...)):
                 }
             )
         
-        logger.info(f"Processing image: {file.filename}")
+        logger.info(f"Processing image: {file.filename} ({len(image_bytes)} bytes)")
         
-        # Step 4: Preprocess image
+        # Preprocess image
         preprocessed_image = preprocessor.preprocess(image_bytes)
         # Now: (1, 128, 128, 3) array ready for AI
         
-        # Step 5: Run AI prediction
+        # Run AI prediction
         predictions = model_loader.predict(preprocessed_image)
         # Returns: [[0.92, 0.05, 0.02, 0.01]]
         
-        # Step 6: Extract results
+        # Extract results
         # Find which class has highest probability
         predicted_class_idx = int(np.argmax(predictions[0]))
         # argmax([0.92, 0.05, 0.02, 0.01]) = 0 (first index)
@@ -148,7 +160,7 @@ async def predict(file: UploadFile = File(...)):
         predicted_class = settings.CLASS_LABELS[predicted_class_idx]
         # predicted_class = "GLIOMA" (from CLASS_LABELS[0])
         
-        # Step 7: Build probabilities dictionary
+        # Build probabilities dictionary
         probabilities = {
             settings.CLASS_LABELS[i]: float(predictions[0][i])
             for i in range(settings.NUM_CLASSES)
@@ -163,7 +175,7 @@ async def predict(file: UploadFile = File(...)):
         
         logger.info(f"Prediction: {predicted_class} (confidence: {confidence:.2f})")
         
-        # Step 8: Return response
+        # Return response
         return {
             "success": True,
             "predictedClass": predicted_class,
@@ -195,6 +207,18 @@ async def predict(file: UploadFile = File(...)):
                 "details": str(e),
             }
         )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "Internal server error",
+            "details": str(exc) if settings.DEBUG else "An error occurred",
+        },
+    )
 
 # ============================================
 # RUN SERVER (for local development)

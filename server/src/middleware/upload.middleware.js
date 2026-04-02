@@ -28,7 +28,7 @@ const fileFilter = (req, file, cb) => {
   if (mimetype && extname) {
     return cb(null, true);
   } else {
-    cb(new Error('Only image files (JPEG, JPG, PNG) are allowed!'));
+    cb(new Error("Only image files (JPEG, JPG, PNG) are allowed!"));
   }
 };
 
@@ -40,3 +40,29 @@ export const uploadScan = multer({
   },
   fileFilter: fileFilter,
 });
+
+// Error handler middleware to clean up rejected files
+export const handleUploadError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    // Multer-specific errors
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: 'File too large. Maximum size is 10MB',
+      });
+    }
+    
+    return res.status(400).json({
+      success: false,
+      message: `Upload error: ${err.message}`,
+    });
+  } else if (err) {
+    // Custom errors like file type validation
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+    });
+  }
+  
+  next();
+};

@@ -31,4 +31,11 @@ export const validationSchemas = {
       "any.required": "Password is required",
     }),
   }),
+
+  createScan: Joi.object({
+    patientId: Joi.string().uuid().required().messages({
+      "string.guid": "Invalid patient ID format",
+      "any.required": "Patient ID is required",
+    }),
+  }),
 };

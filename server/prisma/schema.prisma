@@ -67,8 +67,7 @@ model Patient {
 }
 
 model Scan {
-  id String @id @default(uuid())
-
+  id           String @id @default(uuid())
   imageUrl     String
   cloudinaryId String @unique
 
@@ -90,6 +89,8 @@ model Scan {
   @@index([patientId])
   @@index([status])
   @@index([createdAt])
+  @@index([patientId, status])
+  @@index([patientId, createdAt])
   @@map("scans")
 }
 

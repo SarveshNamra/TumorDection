@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
 
+
 # This class holds all your settings
 class Settings(BaseSettings):
     """Application settings"""
@@ -12,22 +13,22 @@ class Settings(BaseSettings):
     DEBUG: bool = True  # Show detailed errors (turn off in production)
     
     MODEL_PATH: str = "models/brain_tumor_model.h5"
-    INPUT_SIZE: tuple = (128, 128)  # 128x128 pixels
+    INPUT_SIZE: tuple[int, int] = (128, 128)  # 128x128 pixels
     NUM_CLASSES: int = 4
     
-    CLASS_LABELS: list = [
+    CLASS_LABELS: list[str] = [
         "glioma",       # Index 0
         "meningioma",   # Index 1
         "notumor",      # Index 2
         "pituitary"     # Index 3
     ]
     
-    NORMALIZE_RANGE: tuple = (0, 1)  # Scale pixel values 0-1
+    NORMALIZE_RANGE: tuple[int, int] = (0, 1)  # Scale pixel values 0-1
     
     HOST: str = "0.0.0.0"  # Listen on all network interfaces
     PORT: int = 8000       # Port number
     
-    ALLOWED_ORIGINS: list = [
+    ALLOWED_ORIGINS: list[str] = [
         "http://localhost:8080",  # Your Node.js backend
         "http://localhost:5173",  # Your React frontend
     ]
@@ -35,6 +36,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"  # Load from .env file
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields in .env
 
 settings = Settings()
 

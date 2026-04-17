@@ -15,9 +15,11 @@ export const validate = (schemaName) => {
             });
         }
 
+        // Validate the request body against the specified schema
         const { error, value } = schema.validate(req.body, {
-            abortEarly: false,
-            stripUnknown: true,
+            abortEarly: false,      // Return all errors
+            stripUnknown: true,     // Remove unknown fields
+            convert: true,          // Convert types (e.g., "123" → 123)
         });
 
         if (error) {

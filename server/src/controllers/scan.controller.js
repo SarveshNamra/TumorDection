@@ -1,7 +1,11 @@
 import db from '../libs/db.js';
-import { cloudinaryService } from '../services/cloudinary.services.js';
-import { mlService } from '../services/ml.service.js';
-import fs from 'fs';
+import cloudinary from '../config/cloudinary.config.js';
+import axios from 'axios';
+import FormData from 'form-data';
+import { create } from 'node:domain';
+import { stat } from 'node:fs';
+
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
 
 // Map ML service lowercase response to Prisma uppercase enum
 const TUMOR_TYPE_MAP = {
@@ -12,14 +16,14 @@ const TUMOR_TYPE_MAP = {
 };
 
 export const createScan = async (req, res) => {
-    let uploadedFile = null;
     let cloudinaryResult = null;
     let createdScan = null;
 
     try {
         const { patientId } = req.body;
-        uploadedFile = req.file;
+        const uploadedFile = req.file;
 
+        // validation
         if (!uploadedFile) {
             return res.status(400).json({
                 success: false,
@@ -42,55 +46,54 @@ export const createScan = async (req, res) => {
         });
 
         if (!patient) {
-            deleteLocalFile(uploadedFile.path);
             return res.status(404).json({
                 success: false,
                 message: 'Patient not found or access denied',
             });
         }
 
-        try {
-            cloudinaryResult = await cloudinaryService.uploadImage(uploadedFile.path);
-        } catch (cloudinaryError) {
-            console.error("Cloudinary upload error:", cloudinaryError);
-            deleteLocalFile(uploadedFile.path);
-            return res.status(500).json({
-                success: false,
-                message: "Failed to upload image to cloud storage",
-            });
-        }
+        console.log(`Validation passed for patient: ${patient.fullName}`);
 
+        // Create initial scan record
         createdScan = await db.scan.create({
             data: {
-                imageUrl: cloudinaryResult.url,
-                cloudinaryId: cloudinaryResult.publicId,
                 patientId,
                 status: "IN_PROGRESS",
                 tumorType: null,
                 confidence: null,
-                heatmapUrl: null,
-            },
-            include: {
-                patient: {
-                    select: {
-                        id: true,
-                        fullName: true,
-                        age: true,
-                        gender: true,
-                    },
-                },
+                imageUrl: '',
+                cloudinaryId: null,
             },
         });
 
+        console.log(`Scan record created with ID: ${createdScan.id} and status IN_PROGRESS`);
+
+        // Send to ML service for prediction
         let mlResult;
         try {
-            mlResult = await mlService.predictTumor(uploadedFile.path);
+            console.log("Sending file to ML service...");
 
-            deleteLocalFile(uploadedFile.path);
+            const formData = new FormData();
+            formData.append('file', uploadedFile.buffer, {
+                filename: uploadedFile.originalname,
+                contentType: uploadedFile.mimetype,
+            });
+
+            const mlResponse = await axios.post(
+                `${ML_SERVICE_URL}/predict`,
+                formData,
+                {
+                    headers: {
+                        ...formData.getHeaders(),
+                    },
+                    timeout: 60000,
+                }
+            );
+
+            mlResult = mlResponse.data;
+            console.log(`ML prediction result: ${mlResult.predictedClass} with confidence ${mlResult.confidence}`);
         }catch (mlError){
             console.error("ML prediction error: ", mlError);
-
-            deleteLocalFile(uploadedFile.path);
 
             await db.scan.update({
                 where: { id: createdScan.id },
@@ -104,17 +107,72 @@ export const createScan = async (req, res) => {
                 success: false,
                 message: "Scan uploaded but ML analysis failed",
                 data: {
-                    ...createdScan,
+                    scanId: createdScan.id,
                     status: "FAILED",
-                    errorMessage: mlError.message,
+                    errorMessage: mlError.message || "ML prediction failed",
                 },
             });
         }
 
-        const updatedScan = await db.scan.update({
+        // upload to Cloudinary
+
+        try {
+            console.log("Uploading file to Cloudinary...");
+
+            cloudinaryResult = await new Promise((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream(
+                    {
+                        folder: 'neurogenai/scans',
+                        resource_type: 'image',
+                        transformation: [
+                            { width: 1000, height: 1000, crop: 'limit' },
+                            { quality: 'auto' },
+                        ],
+                    },
+                    (error, result) => {
+                        if (error) {
+                            reject(error);
+                        } else {
+                            resolve(result);
+                        }
+                    }
+                );
+
+                uploadStream.end(uploadedFile.buffer);
+            });
+
+            console.log(`File uploaded to Cloudinary with public ID: ${cloudinaryResult.public_id}`);
+        } catch (error) {
+            console.error("Cloudinary upload error: ", cloudinaryError.message);
+
+            await db.scan.update({
+                where: { id: createdScan.id },
+                data: {
+                    status: "FAILED",
+                    errorMessage: "Image upload failed",
+                    tumorType: TUMOR_TYPE_MAP[mlResult.predictedClass] || null,
+                    confidence: mlResult.confidence,
+                },
+            });
+
+            return res.status(500).json({
+                success: false,
+                message: "ML prediction succeeded but image upload failed",
+                data: {
+                    scanId: createdScan.id,
+                    status: 'FAILED',
+                    mlPrediction: mlResult,
+                },
+            });
+        }
+
+        // update with ML results
+        const completedScan = await db.scan.update({
             where: { id: createdScan.id },
             data: {
                 status: "COMPLETED",
+                imageUrl: cloudinaryResult.secure_url,
+                cloudinaryId: cloudinaryResult.public_id,
                 tumorType: TUMOR_TYPE_MAP[mlResult.predictedClass] || null,
                 confidence: mlResult.confidence,
             },
@@ -130,11 +188,13 @@ export const createScan = async (req, res) => {
             },
         });
 
+        console.log("Scan updated with ML results:", completedScan.id);
+
         res.status(201).json({
             success: true,
             message: "Scan created and analyzed successfully",
             data: {
-                ...updatedScan,
+                ...completedScan,
                 mlPrediction: {
                     predictedClass: mlResult.predictedClass,
                     confidence: mlResult.confidence,
@@ -145,22 +205,23 @@ export const createScan = async (req, res) => {
     } catch (error) {
         console.error("Error creating scan:", error);
 
-        // Delete local file if still exists
-        if (uploadedFile?.path) {
-            deleteLocalFile(uploadedFile.path);
-        }
-
         // Delete from Cloudinary if uploaded
-        if (cloudinaryResult?.publicId) {
-            await cloudinaryService.deleteImage(cloudinaryResult.publicId);
+        if (cloudinaryResult?.public_id) {
+            try {
+                await cloudinary.uploader.destroy(cloudinaryResult.public_id);
+                console.log("Cleaned up Cloudinary image");
+            } catch (cleanupError) {
+                console.error("Failed to cleanup Cloudinary:", cleanupError);
+            }
         }
 
         // Delete scan record if created
         if (createdScan?.id) {
             try {
                 await db.scan.delete({ where: { id: createdScan.id } });
-            } catch (dbError) {
-                console.error('Failed to rollback scan:', dbError);
+                console.log("Cleaned up scan record");
+            } catch (cleanupError) {
+                console.error("Failed to cleanup scan:", cleanupError);
             }
         }
 
@@ -305,7 +366,11 @@ export const deleteScan = async (req, res) => {
 
         // Delete from Cloudinary
         if (scan.cloudinaryId) {
-            await cloudinaryService.deleteImage(scan.cloudinaryId);
+            try {
+                await cloudinary.uploader.destroy(scan.cloudinaryId);
+            } catch (error) {
+                console.error("Cloudinary delete error:", error);
+            }
         }
 
         await db.scan.delete({
@@ -322,54 +387,6 @@ export const deleteScan = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Failed to delete scan. Please try again later.",
-        });
-    }
-};
-
-export const updateScanMLResults = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { status, tumorType, confidence, heatmapUrl, errorMessage } = req.body;
-
-        if (!status) {
-            return res.status(400).json({
-                success: false,
-                message: "Please provide status",
-            });
-        }
-
-        const scan = await db.scan.findUnique({
-            where: { id },
-        });
-
-        if (!scan) {
-            return res.status(404).json({
-                success: false,
-                message: "Scan not found",
-            });
-        }
-
-        const updatedScan = await db.scan.update({
-            where: { id },
-            data: {
-                status,
-                tumorType: tumorType ? TUMOR_TYPE_MAP[tumorType] || tumorType : null,
-                confidence: confidence || null,
-                heatmapUrl: heatmapUrl || null,
-                errorMessage: errorMessage || null,
-            },
-        });
-
-        res.status(200).json({
-            success: true,
-            message: "Scan updated successfully",
-            data: updatedScan,
-        });
-    } catch (error) {
-        console.error("Error updating scan:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update scan. Please try again later.",
         });
     }
 };

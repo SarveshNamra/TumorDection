@@ -1,54 +1,56 @@
+import e from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
 
-// Create uploads directory if it doesn't exist
-const uploadDir = 'uploads/scans';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Multer configuration for handling file uploads in memory (no disk storage)
+// This middleware will be used in the scan creation route to handle image uploads
 
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `scan-${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
-});
+// Use memory storage (no disk writes)
+const storage = multer.memoryStorage();
 
-// File filter - only accept images
+// File filter - only allow JPEG, JPG, PNG images
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  const extname = allowedTypes.test(file.originalname.toLowerCase());
+  const mimetype = file.mimetype.startsWith('image/');
 
   if (mimetype && extname) {
     return cb(null, true);
   } else {
-    cb(new Error("Only image files (JPEG, JPG, PNG) are allowed!"));
+    cb(new Error('Only image files (JPEG, JPG, PNG) are allowed'));
   }
 };
 
 // Create multer upload instance
-export const uploadScan = multer({
-  storage: storage,
+export const uploadScanToMemory = multer({
+  storage: storage, // Memory storage
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB max file size
+    fileSize: 10 * 1024 * 1024, // 10MB max
+    files: 1,                   // Only allow one file per request
   },
   fileFilter: fileFilter,
 });
 
-// Error handler middleware to clean up rejected files
+// Error handler middleware
 export const handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    // Multer-specific errors
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
         message: 'File too large. Maximum size is 10MB',
+      });
+    }
+
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        message: "Too many files. Only one file is allowed",
+      });
+    }
+
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        success: false,
+        message: "Unexpected file field. Only 'file' is allowed",
       });
     }
     
@@ -56,13 +58,14 @@ export const handleUploadError = (err, req, res, next) => {
       success: false,
       message: `Upload error: ${err.message}`,
     });
-  } else if (err) {
-    // Custom errors like file type validation
+  } 
+  
+  else if (err) {
     return res.status(400).json({
       success: false,
       message: err.message,
     });
   }
-  
+
   next();
 };

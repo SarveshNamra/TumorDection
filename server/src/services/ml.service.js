@@ -34,7 +34,11 @@ export const mlService = {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || "ML prediction failed");
+        throw new Error(
+          errorData?.detail?.error ||
+          errorData?.message ||
+          "ML prediction failed"
+        );
       }
 
       const result = await response.json();

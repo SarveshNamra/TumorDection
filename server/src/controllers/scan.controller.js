@@ -31,17 +31,17 @@ export const createScan = async (req, res) => {
             });
         }
 
-        if (!patient) {
-                return res.status(400).json({
+        if (!patientId) {
+            return res.status(400).json({
                 success: false,
-                message: "Please provide patientId",
+                message: 'Please provide patientId',
             });
         }
 
         const patient = await db.patient.findFirst({
             where: {
                 id: patientId,
-                userId: req.user.id,
+                userId: req.user.id,    //userId equals the logged-in user’s ID
             },
         });
 
@@ -93,7 +93,7 @@ export const createScan = async (req, res) => {
             mlResult = mlResponse.data;
             console.log(`ML prediction result: ${mlResult.predictedClass} with confidence ${mlResult.confidence}`);
         }catch (mlError){
-            console.error("ML prediction error: ", mlError);
+            console.error("ML prediction error: ", mlError.message);
 
             await db.scan.update({
                 where: { id: createdScan.id },
@@ -142,14 +142,14 @@ export const createScan = async (req, res) => {
             });
 
             console.log(`File uploaded to Cloudinary with public ID: ${cloudinaryResult.public_id}`);
-        } catch (error) {
+        } catch (cloudinaryError) {
             console.error("Cloudinary upload error: ", cloudinaryError.message);
 
             await db.scan.update({
                 where: { id: createdScan.id },
                 data: {
                     status: "FAILED",
-                    errorMessage: "Image upload failed",
+                    errorMessage: cloudinaryError.message,
                     tumorType: TUMOR_TYPE_MAP[mlResult.predictedClass] || null,
                     confidence: mlResult.confidence,
                 },
@@ -188,7 +188,7 @@ export const createScan = async (req, res) => {
             },
         });
 
-        console.log("Scan updated with ML results:", completedScan.id);
+        console.log(`Scan updated with ML results: ${completedScan.id}`);
 
         res.status(201).json({
             success: true,

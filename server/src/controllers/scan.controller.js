@@ -1,11 +1,6 @@
 import db from '../libs/db.js';
-import cloudinary from '../config/cloudinary.config.js';
-import axios from 'axios';
-import FormData from 'form-data';
-import { create } from 'node:domain';
-import { stat } from 'node:fs';
-
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+import { mlService } from '../services/ml.service.js';
+import { cloudinaryService } from '../services/cloudinary.services.js';
 
 // Map ML service lowercase response to Prisma uppercase enum
 const TUMOR_TYPE_MAP = {
@@ -34,7 +29,7 @@ export const createScan = async (req, res) => {
         if (!patientId) {
             return res.status(400).json({
                 success: false,
-                message: 'Please provide patientId',
+                message: "Please provide patientId",
             });
         }
 
@@ -48,7 +43,7 @@ export const createScan = async (req, res) => {
         if (!patient) {
             return res.status(404).json({
                 success: false,
-                message: 'Patient not found or access denied',
+                message: "Patient not found or access denied",
             });
         }
 
@@ -73,24 +68,12 @@ export const createScan = async (req, res) => {
         try {
             console.log("Sending file to ML service...");
 
-            const formData = new FormData();
-            formData.append('file', uploadedFile.buffer, {
-                filename: uploadedFile.originalname,
-                contentType: uploadedFile.mimetype,
-            });
-
-            const mlResponse = await axios.post(
-                `${ML_SERVICE_URL}/predict`,
-                formData,
-                {
-                    headers: {
-                        ...formData.getHeaders(),
-                    },
-                    timeout: 60000,
-                }
+            mlResult = await mlService.predictTumor(
+                uploadedFile.buffer,
+                uploadedFile.originalname,
+                uploadedFile.mimetype
             );
 
-            mlResult = mlResponse.data;
             console.log(`ML prediction result: ${mlResult.predictedClass} with confidence ${mlResult.confidence}`);
         }catch (mlError){
             console.error("ML prediction error: ", mlError.message);
@@ -117,31 +100,12 @@ export const createScan = async (req, res) => {
         // upload to Cloudinary
 
         try {
-            console.log("Uploading file to Cloudinary...");
+            console.log("Uploading to Cloudinary...");
 
-            cloudinaryResult = await new Promise((resolve, reject) => {
-                const uploadStream = cloudinary.uploader.upload_stream(
-                    {
-                        folder: 'neurogenai/scans',
-                        resource_type: 'image',
-                        transformation: [
-                            { width: 1000, height: 1000, crop: 'limit' },
-                            { quality: 'auto' },
-                        ],
-                    },
-                    (error, result) => {
-                        if (error) {
-                            reject(error);
-                        } else {
-                            resolve(result);
-                        }
-                    }
-                );
+            cloudinaryResult = await cloudinaryService.uploadImage(uploadedFile.buffer);
 
-                uploadStream.end(uploadedFile.buffer);
-            });
+            console.log(`Uploaded: ${cloudinaryResult.publicId}`);
 
-            console.log(`File uploaded to Cloudinary with public ID: ${cloudinaryResult.public_id}`);
         } catch (cloudinaryError) {
             console.error("Cloudinary upload error: ", cloudinaryError.message);
 
@@ -149,7 +113,7 @@ export const createScan = async (req, res) => {
                 where: { id: createdScan.id },
                 data: {
                     status: "FAILED",
-                    errorMessage: cloudinaryError.message,
+                    errorMessage: cloudinaryError.message || "Image upload failed after successful ML prediction",
                     tumorType: TUMOR_TYPE_MAP[mlResult.predictedClass] || null,
                     confidence: mlResult.confidence,
                 },
@@ -170,9 +134,9 @@ export const createScan = async (req, res) => {
         const completedScan = await db.scan.update({
             where: { id: createdScan.id },
             data: {
-                status: "COMPLETED",
-                imageUrl: cloudinaryResult.secure_url,
-                cloudinaryId: cloudinaryResult.public_id,
+                status: 'COMPLETED',
+                imageUrl: cloudinaryResult.url,
+                cloudinaryId: cloudinaryResult.publicId,
                 tumorType: TUMOR_TYPE_MAP[mlResult.predictedClass] || null,
                 confidence: mlResult.confidence,
             },
@@ -190,6 +154,8 @@ export const createScan = async (req, res) => {
 
         console.log(`Scan updated with ML results: ${completedScan.id}`);
 
+        // Return combined result
+
         res.status(201).json({
             success: true,
             message: "Scan created and analyzed successfully",
@@ -206,13 +172,8 @@ export const createScan = async (req, res) => {
         console.error("Error creating scan:", error);
 
         // Delete from Cloudinary if uploaded
-        if (cloudinaryResult?.public_id) {
-            try {
-                await cloudinary.uploader.destroy(cloudinaryResult.public_id);
-                console.log("Cleaned up Cloudinary image");
-            } catch (cleanupError) {
-                console.error("Failed to cleanup Cloudinary:", cleanupError);
-            }
+        if (cloudinaryResult?.publicId) {
+            await cloudinaryService.deleteImage(cloudinaryResult.publicId);
         }
 
         // Delete scan record if created
@@ -366,11 +327,7 @@ export const deleteScan = async (req, res) => {
 
         // Delete from Cloudinary
         if (scan.cloudinaryId) {
-            try {
-                await cloudinary.uploader.destroy(scan.cloudinaryId);
-            } catch (error) {
-                console.error("Cloudinary delete error:", error);
-            }
+            await cloudinaryService.deleteImage(scan.cloudinaryId);
         }
 
         await db.scan.delete({

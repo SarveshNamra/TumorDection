@@ -1,10 +1,11 @@
-import e from 'express';
-import multer from 'multer';
+import multer from "multer";
 
-// Multer configuration for handling file uploads in memory (no disk storage)
-// This middleware will be used in the scan creation route to handle image uploads
 
-// Use memory storage (no disk writes)
+// Multer configuration for in-memory file storage
+// Files stored in req.file.buffer (not disk)
+// This allows reusing same buffer for ML + Cloudinary
+
+// Use memory storage (no disk I/O)
 const storage = multer.memoryStorage();
 
 // File filter - only allow JPEG, JPG, PNG images
@@ -16,7 +17,7 @@ const fileFilter = (req, file, cb) => {
   if (mimetype && extname) {
     return cb(null, true);
   } else {
-    cb(new Error('Only image files (JPEG, JPG, PNG) are allowed'));
+    cb(new Error("Only image files (JPEG, JPG, PNG) are allowed"));
   }
 };
 
@@ -36,14 +37,7 @@ export const handleUploadError = (err, req, res, next) => {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File too large. Maximum size is 10MB',
-      });
-    }
-
-    if (err.code === 'LIMIT_FILE_COUNT') {
-      return res.status(400).json({
-        success: false,
-        message: "Too many files. Only one file is allowed",
+        message: "File too large. Maximum size is 10MB",
       });
     }
 

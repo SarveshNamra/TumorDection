@@ -1,8 +1,6 @@
 import FormData from 'form-data';
 import fetch from 'node-fetch';
-import fs from 'fs';
 import { AbortController } from 'node-abort-controller';
-import { clear } from 'console';
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
 const ML_TIMEOUT = 60000;
@@ -12,7 +10,7 @@ export const mlService = {
   // Predict tumor type from an image
   // imagePath: path to the image file to be analyzed
   // Returns: promise result
-  async predictTumor(imagePath) {
+  async predictTumor(imageBuffer, filename = 'scan.jpg', mimetype = 'image/jpeg') {
     // Set up an abort controller to handle timeouts
     const controller = new AbortController();
     const timeout = setTimeout(() => {
@@ -21,7 +19,10 @@ export const mlService = {
     
     try {
       const form = new FormData();
-      form.append('file', fs.createReadStream(imagePath));
+      form.append('file', imageBuffer, {
+        filename: filename,
+        contentType: mimetype,
+      });
 
       const response = await fetch(`${ML_SERVICE_URL}/predict`, {
         method: 'POST',
@@ -33,7 +34,7 @@ export const mlService = {
       clearTimeout(timeout);
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
         throw new Error(
           errorData?.detail?.error ||
           errorData?.message ||

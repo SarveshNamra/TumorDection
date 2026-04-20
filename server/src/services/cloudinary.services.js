@@ -1,40 +1,49 @@
-import { v2 as cloudinary } from 'cloudinary';
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+import cloudinary from '../config/cloudinary.config.js';
+import { Readable } from 'stream';
 
 export const cloudinaryService = {
-  // Upload an image to Cloudinary
-  // filePath: local path to the image file
-  // folder: destination folder in Cloudinary
-  // Returns as a Promise the URL of the uploaded image
-  async uploadImage(filePath, folder = 'neurogenai/scans') {
-    try {
-      const result = await cloudinary.uploader.upload(filePath, {
-        folder: folder,
-        resource_type: 'image',
-        transformation: [
-          {width: 1000, height: 1000, crop: 'limit'},
-          {quality: 'auto'},
-        ],
-      });
 
-      console.log(`Uploaded to Cloudinary: ${result.public_id}`);
+// Upload image to Cloudinary and return URL and publicId
+// imageBuffer: Buffer of the image to upload
+// folder: Cloudinary folder path (default: 'neurogenai/scans')
+// Returns: promise result with { url, publicId }
 
-      return {
-        url: result.secure_url,
-        publicId: result.public_id,
-      };
-    } catch (error) {
-      console.error(`Cloudinary upload failed for: ${filePath}`, error);
-      throw new Error(`Cloudinary upload failed: ${error.message}`);
-    }
+  async uploadImage(imageBuffer, folder = 'neurogenai/scans') {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: folder,
+          resource_type: 'image',
+          transformation: [
+            { width: 1000, height: 1000, crop: 'limit' },
+            { quality: 'auto' },
+          ],
+        },
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(new Error(`Cloudinary upload failed: ${error.message}`));
+          } else {
+            console.log(`Uploaded to Cloudinary: ${result.public_id}`);
+            resolve({
+              url: result.secure_url,
+              publicId: result.public_id,
+            });
+          }
+        }
+      );
+
+      // Convert buffer to stream and pipe to Cloudinary
+      const readableStream = Readable.from(imageBuffer);
+      readableStream.pipe(uploadStream);
+    });
   },
 
-  // Delete an image from Cloudinary using its public ID
+
+// Delete image from Cloudinary
+// publicId: Cloudinary public ID of the image to delete
+// Returns: promise result
+
   async deleteImage(publicId) {
     try {
       const result = await cloudinary.uploader.destroy(publicId);
@@ -47,7 +56,7 @@ export const cloudinaryService = {
       
       return result;
     } catch (error) {
-      console.error(`Cloudinary delete failed for: ${publicId}`, error);
+      console.error(`Cloudinary delete error for ${publicId}:`, error);
     }
   },
 };

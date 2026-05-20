@@ -51,17 +51,17 @@ export const validationSchemas = {
       "number.max": "Age must be less than 150",
       "any.required": "Age is required",
     }),
-    gender: Joi.string().valid('Male', 'Female', 'Other').required().messages({
+    gender: Joi.string().valid("Male", "Female", "Other").required().messages({
       "any.only": "Gender must be Male, Female, or Other",
       "any.required": "Gender is required",
     }),
-    medicalHistory: Joi.string().max(5000).optional().allow('', null),
+    medicalHistory: Joi.string().max(5000).optional().allow("", null),
   }),
 
   updatePatient: Joi.object({
     fullName: Joi.string().min(2).max(100).optional(),
     age: Joi.number().integer().min(1).max(150).optional(),
-    gender: Joi.string().valid('Male', 'Female', 'Other').optional(),
-    medicalHistory: Joi.string().max(5000).optional().allow('', null),
-  }),
+    gender: Joi.string().valid("Male", "Female", "Other").optional(),
+    medicalHistory: Joi.string().max(5000).optional().allow("", null),
+  }).min(1), // At least one field must be provided
 };

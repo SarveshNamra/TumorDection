@@ -69,12 +69,14 @@ model Patient {
 model Scan {
   id           String @id @default(uuid())
   imageUrl     String
-  cloudinaryId String @unique
+  cloudinaryId String? @unique
 
   status ScanStatus @default(PENDING)
 
   tumorType    TumorType?
   confidence   Float?
+  probabilities Json?
+
   heatmapUrl   String?
   errorMessage String?    @db.Text
 

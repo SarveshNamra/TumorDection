@@ -1,6 +1,6 @@
-import db from '../libs/db.js';
-import { mlService } from '../services/ml.service.js';
-import { cloudinaryService } from '../services/cloudinary.services.js';
+import db from "../libs/db.js";
+import { mlService } from "../services/ml.service.js";
+import { cloudinaryService } from "../services/cloudinary.services.js";
 
 // Map ML service lowercase response to Prisma uppercase enum
 const TUMOR_TYPE_MAP = {

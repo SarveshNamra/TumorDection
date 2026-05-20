@@ -1,5 +1,5 @@
-import cloudinary from '../config/cloudinary.config.js';
-import { Readable } from 'stream';
+import cloudinary from "../config/cloudinary.config.js";
+import { Readable } from "stream";
 
 export const cloudinaryService = {
 
@@ -21,7 +21,7 @@ export const cloudinaryService = {
         },
         (error, result) => {
           if (error) {
-            console.error('Cloudinary upload error:', error);
+            console.error("Cloudinary upload error:", error);
             reject(new Error(`Cloudinary upload failed: ${error.message}`));
           } else {
             console.log(`Uploaded to Cloudinary: ${result.public_id}`);

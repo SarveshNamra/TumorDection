@@ -1,6 +1,13 @@
 import { patientService } from "../services/patient.service.js";
 
 export const createPatient = async (req, res) => {
+    if (req.user.role !== "RADIOLOGIST") {
+        return res.status(403).json({
+            success: false,
+            message: "Forbidden Access! Only radiologists can create patients",
+        });
+    }
+
     try {
         const { fullName, age, gender, medicalHistory } = req.body;
 
@@ -65,6 +72,13 @@ export const getPatientById = async (req, res) => {
 };
 
 export const updatePatient = async (req, res) => {
+    if (req.user.role !== "RADIOLOGIST") {
+        return res.status(403).json({
+            success: false,
+            message: "Forbidden Access! Only radiologists can update patients",
+        });
+    }
+
     try {
         const { id } = req.params;
         const { fullName, age, gender, medicalHistory } = req.body;

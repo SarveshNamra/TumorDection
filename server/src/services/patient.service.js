@@ -1,4 +1,3 @@
-import { deletePatient, updatePatient } from "../controllers/patient.controller.js";
 import db from "../libs/db.js";
 
 export const patientService = {
@@ -74,7 +73,7 @@ export const patientService = {
     },
 
     async updatePatient(patientId, userId, data) {
-        if (updateData.age && (updateData.age <= 0 || !Number.isInteger(updateData.age))) {
+        if (data.age && (data.age <= 0 || !Number.isInteger(data.age))) {
             const error = new Error("Age must be a positive integer");
             error.statusCode = 400;
             throw error;
@@ -96,16 +95,16 @@ export const patientService = {
         // To update object dynamically and can only update provided fields
         const updateData = {}; // Empty object to store updated fields
 
-        if (data.fullName !== undefined) dataToUpdate.fullName = updateData.fullName;
-        if (data.age !== undefined) dataToUpdate.age = updateData.age;
-        if (data.gender !== undefined) dataToUpdate.gender = updateData.gender;
-        if (data.medicalHistory !== undefined) dataToUpdate.medicalHistory = updateData.medicalHistory;
+        if (data.fullName !== undefined) updateData.fullName = data.fullName;
+        if (data.age !== undefined) updateData.age = data.age;
+        if (data.gender !== undefined) updateData.gender = data.gender;
+        if (data.medicalHistory !== undefined) updateData.medicalHistory = data.medicalHistory;
 
         const updatePatient = await db.patient.update({
             where: {
                 id: patientId,
             },
-            data: dataToUpdate,
+            data: updateData,
         });
 
         return updatePatient;

@@ -1,6 +1,5 @@
 import multer from "multer";
 
-
 // Multer configuration for in-memory file storage
 // Files stored in req.file.buffer (not disk)
 // This allows reusing same buffer for ML + Cloudinary

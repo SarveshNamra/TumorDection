@@ -1,3 +1,14 @@
+To start the project - 
+    To start server - 
+        & c:\Users\sarve\Desktop\BE_project\.venv\Scripts\Activate.ps1
+        npm run dev
+
+    Running the ML Service -
+        & c:\Users\sarve\Desktop\BE_project\.venv\Scripts\Activate.ps1
+        cd ml-service
+        python -m app.main
+
+
 Where would we use each approach ?
 
 JWT Approach:

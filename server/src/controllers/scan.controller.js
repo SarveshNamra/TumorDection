@@ -139,6 +139,7 @@ export const createScan = async (req, res) => {
                 cloudinaryId: cloudinaryResult.publicId,
                 tumorType: TUMOR_TYPE_MAP[mlResult.predictedClass] || null,
                 confidence: mlResult.confidence,
+                probabilities: mlResult.probabilities,
             },
             include: {
                 patient: {
@@ -250,7 +251,10 @@ export const getScanById = async (req, res) => {
 
         const scan = await db.scan.findUnique({
             where: {
-                id
+                id,
+                patient: {
+                    userId: req.user.id,
+                },
             },
             include: {
                 patient: {
@@ -300,14 +304,14 @@ export const deleteScan = async (req, res) => {
 
         const scan = await db.scan.findUnique({
             where: {
-                id
-            },
-            include: {
+                id,
                 patient: {
-                    select: {
-                        userId: true,
-                    },
+                    userId: req.user.id,
                 },
+            },
+            select: {
+                id: true,
+                cloudinaryId: true,
             },
         });
 

@@ -8,12 +8,14 @@ import multer from "multer";
 const storage = multer.memoryStorage();
 
 // File filter - only allow JPEG, JPG, PNG images
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png/;
-  const extname = allowedTypes.test(file.originalname.toLowerCase());
-  const mimetype = file.mimetype.startsWith('image/');
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png'];
 
-  if (mimetype && extname) {
+const fileFilter = (req, file, cb) => {
+  const allowedExtensions = /\.(jpe?g|png)$/i;
+  const hasValidExtension = allowedExtensions.test(file.originalname);
+  const hasValidMimeType = ALLOWED_MIME_TYPES.includes(file.mimetype);
+
+  if (hasValidExtension && hasValidMimeType) {
     return cb(null, true);
   } else {
     cb(new Error("Only image files (JPEG, JPG, PNG) are allowed"));

@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
+import morgan from "morgan";
+
 import authRouter from "./routes/auth.routes.js";
 import patientRouter from "./routes/patient.routes.js";
 import reportRouter from "./routes/report.routes.js";

@@ -3,6 +3,8 @@ import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
 
 
 function App() {
@@ -13,12 +15,13 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<h1>Register</h1>} />
+          <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <h1>Dashboard</h1>
-            </ProtectedRoute>
-          } />
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

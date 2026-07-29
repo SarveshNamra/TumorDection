@@ -18,6 +18,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+app.use(morgan("dev"));
 
 // Health check
 app.get("/", (req, res) => {

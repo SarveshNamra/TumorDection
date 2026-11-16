@@ -1,16 +1,13 @@
 import express from "express";
-import { report } from "process";
-import { authenticate, authorize } from "../middleware/auth.middleware.js";
+import { authenticate } from "../middleware/auth.middleware.js";
+import { validate } from "../middleware/validate.middleware.js";
+import { createReport, getReportById } from "../controllers/report.controller.js";
 
 const reportRouter = express.Router();
 
-// Only authenticated users can access this route
-// reportRouter.get("/my-reports", authenticate, getMyReports);
+reportRouter.use(authenticate);
 
-// Only Doctors can access this route
-// reportRouter.get("/create", authenticate, authorize(UserRole.DOCTOR), createReport);
-
-// Both role can view
-// reportRouter.get("/:id", authenticate, authorize(UserRole.DOCTOR, UserRole.RADIOLOGIST), getReport);
+reportRouter.post("/", validate("createReport"), createReport);
+reportRouter.get("/:id", getReportById);
 
 export default reportRouter;

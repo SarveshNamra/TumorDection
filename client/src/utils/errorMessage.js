@@ -1,9 +1,9 @@
-/*
-    Maps an Axios error to a user-friendly message.
-    Prefers the backend's own message (matches { success, message, data }
-    contract) and falls back to a generic message per status code.
-    401 is intentionally not special-cased here — the global interceptor
-    in api.js already clears AuthContext and ProtectedRoute redirects.
+/**
+ * Maps an Axios error to a user-friendly message.
+ * Prefers the backend's own message (matches { success, message, data }
+ * contract) and falls back to a generic message per status code.
+ * 401 is intentionally not special-cased here — the global interceptor
+ * in api.js already clears AuthContext and ProtectedRoute redirects.
  */
 export const getErrorMessage = (error, fallback = "Something went wrong. Please try again.") => {
   const status = error.response?.status;
@@ -18,8 +18,14 @@ export const getErrorMessage = (error, fallback = "Something went wrong. Please 
       return "You don't have permission to perform this action.";
     case 404:
       return "The requested resource was not found.";
+    case 413:
+      return "File is too large. Maximum size is 10 MB.";
+    case 422:
+      return "The submitted data is invalid. Please check the form and try again.";
     case 500:
       return "Server error. Please try again later.";
+    case 502:
+      return "Scan processing failed. The prediction or image upload service is temporarily unavailable. Please try again.";
     default:
       return fallback;
   }

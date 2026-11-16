@@ -103,7 +103,7 @@ model Report {
   impression      String @db.Text
   recommendations String @db.Text
 
-  pdfUrl          String
+  pdfUrl          String?
   pdfCloudinaryId String? @unique
 
   scanId String @unique

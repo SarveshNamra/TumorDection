@@ -64,4 +64,11 @@ export const validationSchemas = {
     gender: Joi.string().valid("Male", "Female", "Other").optional(),
     medicalHistory: Joi.string().max(5000).optional().allow("", null),
   }).min(1), // At least one field must be provided
+
+  createReport: Joi.object({
+    scanId: Joi.string().uuid().required().messages({
+      "string.guid": "Invalid scan ID format",
+      "any.required": "Scan ID is required",
+    }),
+  }),
 };

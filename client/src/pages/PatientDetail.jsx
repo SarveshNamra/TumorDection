@@ -1,21 +1,20 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, FileText, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "../hooks/useAuth.js";
 import { patientService } from "../services/patientService.js";
+import { scanService } from "../services/scanService.js";
+import { reportService } from "../services/reportService.js";
 import { getErrorMessage } from "../utils/errorMessage.js";
 import Loader from "../components/common/Loader.jsx";
 import ErrorState from "../components/common/ErrorState.jsx";
 import ConfirmDialog from "../components/common/ConfirmDialog.jsx";
 import PatientFormModal from "../components/patients/PatientFormModal.jsx";
-
-const STATUS_STYLES = {
-  COMPLETED: "bg-green-100 text-green-700",
-  IN_PROGRESS: "bg-blue-100 text-blue-700",
-  FAILED: "bg-red-100 text-red-700",
-  PENDING: "bg-gray-100 text-gray-600",
-};
+import ScanUpload from "../components/scans/ScanUpload.jsx";
+import PredictionResult from "../components/scans/PredictionResult.jsx";
+import ScanStatusBadge from "../components/scans/ScanStatusBadge.jsx";
+import ReportModal from "../components/reports/ReportModal.jsx";
 
 const PatientDetail = () => {
   const { id } = useParams();
@@ -27,14 +26,27 @@ const PatientDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [scans, setScans] = useState([]);
+  const [scansLoading, setScansLoading] = useState(true);
+  const [scansError, setScansError] = useState(null);
+
   const [formOpen, setFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Holds the mlPrediction object from the most recent successful upload in this session, so it can be shown alongside the scan
+  // list without a second API call.
+  const [latestPrediction, setLatestPrediction] = useState(null);
+
+  const generatingRef = useRef(new Set()); // Holds scan IDs for which a report is being generated, to disable the button while waiting for the backend.
+  const [generatingIds, setGeneratingIds] = useState([]);
+  const [viewReportId, setViewReportId] = useState(null);
+  
   const fetchPatient = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setLatestPrediction(null);
     try {
       const data = await patientService.getById(id);
       setPatient(data);
@@ -45,9 +57,23 @@ const PatientDetail = () => {
     }
   }, [id]);
 
+  const fetchScans = useCallback(async () => {
+    setScansLoading(true);
+    setScansError(null);
+    try {
+      const data = await scanService.getByPatientId(id);
+      setScans(data);
+    } catch (err) {
+      setScansError(getErrorMessage(err, "Failed to load scans."));
+    } finally {
+      setScansLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     fetchPatient();
-  }, [fetchPatient]);
+    fetchScans();
+  }, [fetchPatient, fetchScans]);
 
   const handleFormSubmit = async (formData) => {
     setSubmitting(true);
@@ -75,6 +101,94 @@ const PatientDetail = () => {
     }
   };
 
+  // Successful 201: add the returned scan to history without refetching.
+  // No report object is fabricated; a new scan has no report yet.
+  const handleUploadSuccess = (data) => {
+    const { patient: _omit, mlPrediction, ...newScan } = data;
+    setScans((prev) => [{ ...newScan, report: null }, ...prev]);
+    setLatestPrediction(mlPrediction);
+  };
+
+  // On failure (typically 502), the backend has already persisted a FAILED scan row with only partial data returned in the error body.
+  // Resync from the backend rather than fabricating a scan-list entry from incomplete data.
+  const handleUploadFailed = () => {
+    fetchScans();
+  };
+
+  const handleGenerateReport = async (scanId) => {
+    if (generatingRef.current.has(scanId)) return;
+    generatingRef.current.add(scanId);
+    setGeneratingIds((prev) => [...prev, scanId]);
+
+    try {
+      const { report, created, message } = await reportService.generate(scanId);
+
+      setScans((prev) =>
+        prev.map((scan) =>
+          scan.id === scanId
+            ? {
+                ...scan,
+                report: {
+                  id: report.id,
+                  pdfUrl: report.pdfUrl,
+                  createdAt: report.createdAt,
+                },
+              }
+            : scan
+        )
+      );
+
+      toast.success(created ? "Report generated successfully" : message || "Report already exists");
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Failed to generate report."));
+    } finally {
+      generatingRef.current.delete(scanId);
+      setGeneratingIds((prev) => prev.filter((sid) => sid !== scanId));
+    }
+  };
+
+  const renderReportAction = (scan) => {
+    if (scan.status !== "COMPLETED") {
+      return (
+        <p className="text-xs text-gray-400">
+          Reports are available after successful scan processing.
+        </p>
+      );
+    }
+
+    if (scan.report) {
+      return (
+        <button
+          type="button"
+          onClick={() => setViewReportId(scan.report.id)}
+          className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          <FileText size={14} /> View Report
+        </button>
+      );
+    }
+
+    const isGenerating = generatingIds.includes(scan.id);
+    return (
+      <button
+        type="button"
+        onClick={() => handleGenerateReport(scan.id)}
+        disabled={isGenerating}
+        className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+      >
+        {isGenerating ? (
+          <>
+            <Loader2 size={14} className="animate-spin" /> Generating...
+          </>
+        ) : (
+          <>
+            <FileText size={14} /> Generate Report
+          </>
+        )}
+      </button>
+    );
+  };
+
   if (loading) return <Loader label="Loading patient..." />;
   if (error) return <ErrorState message={error} onRetry={fetchPatient} />;
   if (!patient) return null;
@@ -99,7 +213,6 @@ const PatientDetail = () => {
                 <Pencil size={16} /> Edit
               </button>
             )}
-            {/* Both DOCTOR and RADIOLOGIST can delete — matches backend authorization */}
             <button onClick={() => setDeleteOpen(true)} className="flex items-center gap-1 text-sm text-gray-600 hover:text-red-600">
               <Trash2 size={16} /> Delete
             </button>
@@ -112,17 +225,37 @@ const PatientDetail = () => {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <h2 className="text-sm font-semibold text-gray-900 mb-4">Scans ({patient.scans?.length ?? 0})</h2>
+      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+        <h2 className="text-sm font-semibold text-gray-900 mb-4">Upload MRI Scan</h2>
+        <ScanUpload
+          patientId={id}
+          onUploadSuccess={handleUploadSuccess}
+          onUploadFailed={handleUploadFailed}
+        />
+      </div>
 
-        {(!patient.scans || patient.scans.length === 0) && (
+      {latestPrediction && (
+        <div className="mb-6">
+          <PredictionResult prediction={latestPrediction} />
+        </div>
+      )}
+
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h2 className="text-sm font-semibold text-gray-900 mb-4">
+          Scans{!scansLoading && !scansError ? ` (${scans.length})` : ""}
+        </h2>
+
+        {scansLoading && <Loader label="Loading scans..." />}
+        {!scansLoading && scansError && <ErrorState message={scansError} onRetry={fetchScans} />}
+
+        {!scansLoading && !scansError && scans.length === 0 && (
           <p className="text-sm text-gray-500">No scans uploaded yet.</p>
         )}
 
-        {patient.scans && patient.scans.length > 0 && (
+        {!scansLoading && !scansError && scans.length > 0 && (
           <ul className="divide-y divide-gray-100">
-            {patient.scans.map((scan) => (
-              <li key={scan.id} className="py-3 flex items-center justify-between">
+            {scans.map((scan) => (
+              <li key={scan.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm text-gray-800">
                     {scan.tumorType ? scan.tumorType.replace("_", " ") : "Pending result"}
@@ -132,18 +265,19 @@ const PatientDetail = () => {
                     {scan.confidence != null && ` · Confidence: ${(scan.confidence * 100).toFixed(1)}%`}
                   </p>
                 </div>
-                <span
-                  className={`text-xs font-medium px-2 py-1 rounded-full ${
-                    STATUS_STYLES[scan.status] || "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {scan.status}
-                </span>
+                <div className="flex items-center gap-4">
+                  {renderReportAction(scan)}
+                  <ScanStatusBadge status={scan.status} />
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {viewReportId && (
+        <ReportModal reportId={viewReportId} onClose={() => setViewReportId(null)} />
+      )}
 
       <PatientFormModal
         isOpen={formOpen}
